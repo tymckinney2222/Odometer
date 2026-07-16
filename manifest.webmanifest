@@ -1,0 +1,18 @@
+{
+  "id": "/Odometer/",
+  "name": "Odometer — Lease Pace",
+  "short_name": "Odometer",
+  "description": "Track your leased vehicles' mileage and see if you're on pace to stay under your allowance.",
+  "start_url": "/Odometer/",
+  "scope": "/Odometer/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "icons": [
+    { "src": "/Odometer/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/Odometer/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/Odometer/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/Odometer/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
