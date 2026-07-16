@@ -6,17 +6,15 @@
    - Static assets (icons, manifest): cache-first for speed.
    Bump CACHE_VERSION on each deploy to retire old caches.
 */
-var CACHE_VERSION = "odometer-v1";
+var CACHE_VERSION = "odometer-v2";
 var CORE_ASSETS = [
-  "./",
-  "./index.html",
-  "./manifest.webmanifest",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/maskable-192.png",
-  "./icons/maskable-512.png",
-  "./icons/apple-touch-icon.png",
-  "./icons/favicon-32.png"
+  "/Odometer/",
+  "/Odometer/index.html",
+  "/Odometer/manifest.webmanifest",
+  "/Odometer/icons/icon-192.png",
+  "/Odometer/icons/icon-512.png",
+  "/Odometer/icons/maskable-192.png",
+  "/Odometer/icons/maskable-512.png"
 ];
 
 self.addEventListener("install", function(e){
@@ -54,7 +52,7 @@ self.addEventListener("fetch", function(e){
         return res;
       }).catch(function(){
         return caches.match(req).then(function(hit){
-          return hit || caches.match("./index.html");
+          return hit || caches.match("/Odometer/index.html");
         });
       })
     );
