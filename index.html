@@ -277,8 +277,43 @@
   .cmp-val{flex:none;width:64px;text-align:right;font-size:13px;font-weight:700}
   .cmp-cap-note{font-size:10.5px;color:var(--text-faint);text-align:center;margin-top:8px}
   .cmp-cap-note b{color:var(--text-dim)}
+  .cmp-delta{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-top:12px;padding-top:12px;border-top:1px solid var(--hair);
+  }
+  .cmp-delta .cd-lab{font-size:12px;color:var(--text-dim);font-weight:600}
+  .cmp-delta .cd-val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .cmp-delta .cd-val small{font-size:11px;font-weight:600;color:var(--text-faint);margin-left:4px}
   .cmp-empty{font-size:12.5px;color:var(--text-faint);text-align:center;padding:6px 8px 2px;line-height:1.55}
   .cmp-empty a{color:var(--accent);text-decoration:none;font-weight:600}
+
+  /* ===== Drift-from-plan banner ===== */
+  .drift{
+    display:flex;align-items:flex-start;gap:11px;border-radius:14px;padding:13px 15px;margin-bottom:16px;
+    font-size:13px;line-height:1.45;border:1px solid;
+  }
+  .drift .d-ico{flex:none;font-size:17px;line-height:1.2}
+  .drift .d-txt b{font-weight:700}
+  .drift.over{background:rgba(255,93,93,.1);border-color:rgba(255,93,93,.32);color:#ffbcbc}
+  .drift.under{background:rgba(84,217,138,.1);border-color:rgba(84,217,138,.3);color:#a8e8c4}
+  .drift.warn{background:rgba(245,182,66,.1);border-color:rgba(245,182,66,.32);color:#f3d090}
+
+  /* ===== Turn-in summary card ===== */
+  .turnin{
+    background:linear-gradient(180deg,var(--ink-2),var(--ink-3));
+    border:1px solid var(--hair);border-radius:18px;padding:18px 16px;margin-bottom:16px;
+  }
+  .turnin-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
+  .turnin-head .ti-t{font-size:13px;font-weight:700;color:var(--text-dim);letter-spacing:.02em}
+  .turnin-head .ti-days{font-size:12px;color:var(--text-faint)}
+  .turnin-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .ti-cell{background:var(--ink);border:1px solid var(--hair);border-radius:12px;padding:12px 13px}
+  .ti-cell.full{grid-column:1 / -1}
+  .ti-cell .tc-lab{font-size:10.5px;color:var(--text-faint);letter-spacing:.03em;margin-bottom:4px}
+  .ti-cell .tc-val{font-size:19px;font-weight:700}
+  .ti-cell .tc-sub{font-size:11px;color:var(--text-dim);margin-top:2px}
+  .turnin-verdict{margin-top:12px;font-size:12.5px;line-height:1.5;color:var(--text-dim);text-align:center}
+  .turnin-verdict b{font-weight:700}
 
   .sheet-actions{display:flex;gap:10px;margin-top:8px}
   .btn{
@@ -318,7 +353,10 @@
       </svg>
       <h1>Odometer<span> · lease pace</span></h1>
     </div>
-    <button class="hdr-btn" id="settingsBtn" aria-label="Vehicle settings">⚙</button>
+    <div style="display:flex;gap:8px">
+      <button class="hdr-btn" id="backupBtn" aria-label="Backup and restore">⤓</button>
+      <button class="hdr-btn" id="settingsBtn" aria-label="Vehicle settings">⚙</button>
+    </div>
   </header>
 
   <div class="tabs" id="tabs"></div>
@@ -416,6 +454,20 @@
     <button class="btn btn-danger" id="vDelete">Delete</button>
     <button class="btn btn-ghost" id="vCancel">Cancel</button>
     <button class="btn btn-primary" id="vSave">Save</button>
+  </div>
+</div>
+
+<!-- Backup / restore sheet -->
+<div class="sheet" id="backupSheet">
+  <div class="sheet-grip"></div>
+  <h2>Backup &amp; restore</h2>
+  <div class="sh-sub">Your data lives only on this device. Export a backup file to keep it safe or move it to another phone.</div>
+  <button class="btn btn-primary" id="bkExport" style="width:100%;margin-bottom:10px">⤓ Export backup file</button>
+  <button class="btn btn-ghost" id="bkImportBtn" style="width:100%;margin-bottom:6px">⤒ Import from backup</button>
+  <input type="file" id="bkFile" accept="application/json,.json,.txt" style="display:none" />
+  <div id="bkStatus" style="font-size:12.5px;color:var(--text-faint);text-align:center;margin:12px 0 4px;line-height:1.5"></div>
+  <div class="sheet-actions" style="margin-top:14px">
+    <button class="btn btn-ghost" id="bkClose">Close</button>
   </div>
 </div>
 
@@ -697,6 +749,9 @@
     html+= gaugeSVG(ang, zone, centerHTML);
     html+='</div>';
 
+    // ---- Drift-from-plan banner (only when both plan + readings exist) ----
+    html+= driftBanner(c);
+
     // ---- Stat trio ----
     var projZone = zoneFor(c.projectedTotalMiles / c.totalAllowed);
     html+='<div class="trio">';
@@ -732,6 +787,9 @@
 
     // ---- Projection comparison (actual readings vs weekly plan) ----
     html+= comparisonCard(c, v);
+
+    // ---- Turn-in / lease-end summary ----
+    html+= turninSummary(c, v);
 
     // ---- Daily budget hint ----
     var budgetTxt = c.dailyBudget>=0
@@ -878,6 +936,82 @@
       +'</div>';
   }
 
+  // Drift banner: flags when actual logging diverges from the weekly plan.
+  function driftBanner(c){
+    if(!c.hasReadings || !c.profileProj) return "";
+    var actual = c.projectedTotalMiles;
+    var plan = c.profileProj.projectedTotal;
+    var cap = c.totalAllowed;
+    var diff = actual - plan;            // + means driving more than planned
+    var threshold = cap * 0.03;          // only surface once gap is meaningful
+    if(Math.abs(diff) < threshold) return "";
+
+    var absd = fmtNum(Math.abs(diff));
+    if(diff > 0){
+      var overCap = actual > cap;
+      if(overCap){
+        return '<div class="drift over">'
+          + '<span class="d-ico">▲</span>'
+          + '<span class="d-txt">You\'re logging <b>'+absd+' mi</b> more than your plan — enough to finish <b>over your cap</b>. Ease off, or expect overage fees.</span>'
+          + '</div>';
+      }
+      return '<div class="drift warn">'
+        + '<span class="d-ico">▲</span>'
+        + '<span class="d-txt">You\'re driving <b>'+absd+' mi</b> ahead of your plan. Still under cap, but worth watching.</span>'
+        + '</div>';
+    }
+    return '<div class="drift under">'
+      + '<span class="d-ico">✓</span>'
+      + '<span class="d-txt">Nice — you\'re logging <b>'+absd+' mi</b> less than your plan. You\'re banking miles.</span>'
+      + '</div>';
+  }
+
+  // Turn-in summary: the end-of-lease money picture, screenshot-ready.
+  function turninSummary(c, v){
+    var projected = (c.hasReadings && c.projectedTotalMiles>0) ? c.projectedTotalMiles
+                  : (c.profileProj ? c.profileProj.projectedTotal : null);
+    var source = (c.hasReadings && c.projectedTotalMiles>0) ? "your logged pace"
+               : (c.profileProj ? "your typical week" : null);
+    if(projected==null) return "";
+
+    var cap = c.totalAllowed;
+    var overMiles = projected - cap;
+    var overCost = overMiles>0 ? overMiles*v.fee : 0;
+    var overC = overMiles>0 ? "var(--over)" : "var(--under)";
+
+    var out = '<div class="turnin">';
+    out += '<div class="turnin-head">'
+        +    '<span class="ti-t">Lease-end outlook</span>'
+        +    '<span class="ti-days">'+c.daysLeft+' days left · ends '+fmtDate(c.endISO)+'</span>'
+        + '</div>';
+    out += '<div class="turnin-grid">';
+    out += '<div class="ti-cell">'
+        +    '<div class="tc-lab">PROJECTED AT TURN-IN</div>'
+        +    '<div class="tc-val mono">'+fmtNum(projected)+'</div>'
+        +    '<div class="tc-sub">of '+fmtNum(cap)+' mi cap</div>'
+        + '</div>';
+    out += '<div class="ti-cell">'
+        +    '<div class="tc-lab">'+(overMiles>0?"PROJECTED OVERAGE":"PROJECTED CUSHION")+'</div>'
+        +    '<div class="tc-val mono" style="color:'+overC+'">'+(overMiles>0?"+":"")+fmtNum(overMiles)+'</div>'
+        +    '<div class="tc-sub">miles '+(overMiles>0?"over":"under")+'</div>'
+        + '</div>';
+    out += '<div class="ti-cell full">'
+        +    '<div class="tc-lab">ESTIMATED OVERAGE COST AT $'+v.fee.toFixed(2)+'/MI</div>'
+        +    '<div class="tc-val mono" style="color:'+(overCost>0?"var(--over)":"var(--under)")+'">'+(overCost>0?"$"+fmtNum(overCost):"$0")+'</div>'
+        + '</div>';
+    out += '</div>';
+
+    var verdict;
+    if(overCost > 0){
+      verdict = 'At this rate you\'d owe about <b style="color:var(--over)">$'+fmtNum(overCost)+'</b> at turn-in. Worth weighing against a buyout or a higher-mileage lease next time.';
+    }else{
+      verdict = 'You\'re on track to finish <b style="color:var(--under)">under your cap</b> with miles to spare — no overage expected.';
+    }
+    out += '<div class="turnin-verdict">Based on '+source+'. '+verdict+'</div>';
+    out += '</div>';
+    return out;
+  }
+
   function comparisonCard(c, v){
     var actual = c.projectedTotalMiles;      // from readings
     var plan = c.profileProj ? c.profileProj.projectedTotal : null;
@@ -927,23 +1061,22 @@
     out += bar("Your plan", "typical week", hasP?plan:null, true);
     out += bar("Your logging", hasA?"actual pace":"log to see", hasA?actual:null, false);
 
-    // Cap note + verdict
+    // Explicit delta between actual and plan (only when both exist)
+    if(hasA && hasP){
+      var diff = actual - plan;   // + = logging more than planned
+      var near = Math.abs(diff) < cap*0.03;
+      var dColor = near ? "var(--text)" : (diff>0 ? "var(--over)" : "var(--under)");
+      var dLabel = near ? "On plan" : (diff>0 ? "Over plan" : "Under plan");
+      var dVal = (diff>0?"+":(diff<0?"−":"")) + fmtNum(Math.abs(diff));
+      out += '<div class="cmp-delta">'
+          +    '<span class="cd-lab">Actual vs. plan</span>'
+          +    '<span class="cd-val" style="color:'+dColor+'">'+dVal+'<small>mi · '+dLabel+'</small></span>'
+          + '</div>';
+    }
+
+    // Cap note
     var note = 'White line = your <b>'+fmtNum(cap)+' mi</b> cap.';
     out += '<div class="cmp-cap-note">'+note+'</div>';
-
-    // If both exist, add a one-line takeaway comparing them
-    if(hasA && hasP){
-      var diff = actual - plan;
-      var msg="";
-      if(Math.abs(diff) < cap*0.03){
-        msg = 'You\'re driving right about as planned.';
-      }else if(diff>0){
-        msg = 'You\'re logging <b style="color:var(--over)">'+fmtNum(diff)+' mi</b> more than your plan.';
-      }else{
-        msg = 'You\'re logging <b style="color:var(--under)">'+fmtNum(-diff)+' mi</b> less than your plan.';
-      }
-      out += '<div class="cmp-cap-note" style="margin-top:5px">'+msg+'</div>';
-    }
 
     out += '</div>';
     return out;
@@ -1212,6 +1345,85 @@
     openVehicleSheet(activeIdx);
   });
 
+  /* ---------- Backup / restore ---------- */
+  var backupSheet=document.getElementById("backupSheet");
+  document.getElementById("backupBtn").addEventListener("click", function(){
+    document.getElementById("bkStatus").textContent="";
+    showSheet(backupSheet);
+  });
+  document.getElementById("bkClose").addEventListener("click", function(){ hideSheet(backupSheet); });
+
+  document.getElementById("bkExport").addEventListener("click", function(){
+    try{
+      var payload = {
+        app:"odometer", version:1,
+        exportedAt: new Date().toISOString(),
+        data: state
+      };
+      var text = JSON.stringify(payload, null, 2);
+      var blob = new Blob([text], {type:"application/json"});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      var d = new Date();
+      var stamp = d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
+      a.href = url;
+      a.download = "odometer-backup-"+stamp+".json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+      document.getElementById("bkStatus").innerHTML='<span style="color:var(--under)">✓ Backup file created — check your downloads.</span>';
+      toast("Backup exported");
+    }catch(e){
+      document.getElementById("bkStatus").innerHTML='<span style="color:var(--over)">Export failed on this device.</span>';
+    }
+  });
+
+  document.getElementById("bkImportBtn").addEventListener("click", function(){
+    document.getElementById("bkFile").click();
+  });
+  document.getElementById("bkFile").addEventListener("change", function(ev){
+    var file = ev.target.files && ev.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var parsed = JSON.parse(reader.result);
+        // Accept either our wrapper {app,data} or a raw state object
+        var incoming = (parsed && parsed.data && parsed.data.vehicles) ? parsed.data
+                     : (parsed && parsed.vehicles) ? parsed : null;
+        if(!incoming || !incoming.vehicles || !incoming.vehicles.length){
+          throw new Error("no vehicles");
+        }
+        var count = incoming.vehicles.length;
+        var totalReadings = 0;
+        for(var i=0;i<incoming.vehicles.length;i++){
+          totalReadings += (incoming.vehicles[i].readings||[]).length;
+        }
+        if(!confirm("Restore "+count+" vehicle"+(count>1?"s":"")+" and "+totalReadings+" reading"+(totalReadings!==1?"s":"")+"? This replaces everything currently in the app.")){
+          document.getElementById("bkFile").value="";
+          return;
+        }
+        state = incoming;
+        if(activeIdx >= state.vehicles.length) activeIdx = 0;
+        save();
+        render();
+        document.getElementById("bkFile").value="";
+        document.getElementById("bkStatus").innerHTML='<span style="color:var(--under)">✓ Restored '+count+' vehicle'+(count>1?'s':'')+'.</span>';
+        toast("Backup restored");
+      }catch(e){
+        document.getElementById("bkFile").value="";
+        document.getElementById("bkStatus").innerHTML='<span style="color:var(--over)">That file isn\'t a valid Odometer backup.</span>';
+      }
+    };
+    reader.onerror = function(){
+      document.getElementById("bkStatus").innerHTML='<span style="color:var(--over)">Couldn\'t read that file.</span>';
+    };
+    reader.readAsText(file);
+  });
+
+  function pad2(n){ return (n<10?"0":"")+n; }
+
   /* ---------- Sheet plumbing ---------- */
   function showSheet(sheet){
     scrim.classList.add("on");
@@ -1221,13 +1433,13 @@
     sheet.classList.remove("on");
     // only drop scrim if no sheet open
     setTimeout(function(){
-      if(!logSheet.classList.contains("on") && !vehSheet.classList.contains("on")){
+      if(!logSheet.classList.contains("on") && !vehSheet.classList.contains("on") && !backupSheet.classList.contains("on")){
         scrim.classList.remove("on");
       }
     }, 30);
   }
   scrim.addEventListener("click", function(){
-    hideSheet(logSheet); hideSheet(vehSheet);
+    hideSheet(logSheet); hideSheet(vehSheet); hideSheet(backupSheet);
   });
 
   /* ---------- Toast ---------- */
