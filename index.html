@@ -1253,7 +1253,7 @@
   // Register the external service worker for installability + offline use
   if("serviceWorker" in navigator){
     window.addEventListener("load", function(){
-      navigator.serviceWorker.register("sw.js").catch(function(){});
+      navigator.serviceWorker.register("/Odometer/sw.js", {scope:"/Odometer/"}).catch(function(){});
     });
   }
 })();
