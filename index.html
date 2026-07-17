@@ -213,6 +213,29 @@
   .hist-del:active{opacity:1;color:var(--over)}
   .hist-empty{text-align:center;color:var(--text-faint);font-size:13px;padding:30px 20px;line-height:1.6}
 
+  /* ===== Daily miles table ===== */
+  .dtable-card{
+    background:var(--ink-3);border:1px solid var(--hair);border-radius:18px;
+    padding:16px 4px 8px;margin-bottom:16px;overflow:hidden;
+  }
+  .dtable-head{font-size:13px;font-weight:600;color:var(--text-dim);margin:0 14px 12px}
+  .dtable{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  .dtable th{
+    font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.04em;
+    text-transform:uppercase;text-align:right;padding:0 14px 8px;border-bottom:1px solid var(--hair);
+  }
+  .dtable th:first-child{text-align:left}
+  .dtable td{
+    font-size:13px;padding:11px 14px;border-bottom:1px solid rgba(42,55,68,.5);text-align:right;
+  }
+  .dtable td:first-child{text-align:left;color:var(--text-dim);white-space:nowrap}
+  .dtable tr:last-child td{border-bottom:none}
+  .dtable .dt-odo{font-weight:700;color:var(--text)}
+  .dtable .dt-miles{font-weight:700}
+  .dtable .dt-rate{color:var(--text-dim);font-size:12px}
+  .dtable .dt-first td{color:var(--text-faint);font-style:italic;text-align:center}
+  .dtable-empty{font-size:12.5px;color:var(--text-faint);text-align:center;padding:12px 14px 16px;line-height:1.5}
+
   /* ===== Modal / sheet ===== */
   .scrim{
     position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);
@@ -800,6 +823,9 @@
     // ---- Trend chart (per-segment daily rate vs target) ----
     html+= trendChart(c, v);
 
+    // ---- Daily miles table ----
+    html+= dailyTable(v);
+
     // ---- Log button ----
     html+='<button class="log-btn" id="openLog">'
         +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>'
@@ -1160,6 +1186,68 @@
     var d=parseISO(iso); if(!d) return "";
     var mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     return mo[d.getMonth()]+" "+d.getDate();
+  }
+
+  // Daily miles table — one row per logged reading, newest first.
+  // Shows odometer, miles added since the previous reading, days elapsed,
+  // and the resulting miles/day (accurate whether logged daily or with gaps).
+  function dailyTable(v){
+    var out = '<div class="dtable-card">';
+    out += '<div class="dtable-head">Miles by reading</div>';
+
+    if(!v.readings || !v.readings.length){
+      out += '<div class="dtable-empty">Log a reading and your daily miles will appear here.</div>';
+      out += '</div>';
+      return out;
+    }
+
+    // Sort ascending to compute deltas, then display newest first.
+    var asc = v.readings.slice().sort(function(a,b){
+      var d=parseISO(a.date)-parseISO(b.date); if(d!==0) return d; return a.odo-b.odo;
+    });
+
+    // Build rows with computed miles/day vs the previous point (or lease start).
+    var rows=[];
+    for(var i=0;i<asc.length;i++){
+      var cur=asc[i];
+      var prevOdo, prevDate, isFirst=false;
+      if(i>0){ prevOdo=asc[i-1].odo; prevDate=asc[i-1].date; }
+      else if(v.startOdo!=null && v.startDate){ prevOdo=v.startOdo; prevDate=v.startDate; isFirst=true; }
+      else { prevOdo=null; }
+
+      var miles=null, days=null, rate=null;
+      if(prevOdo!=null){
+        miles = cur.odo - prevOdo; if(miles<0) miles=0;
+        days = daysBetween(parseISO(prevDate), parseISO(cur.date));
+        if(days<=0) days=1;
+        rate = miles/days;
+      }
+      rows.push({date:cur.date, odo:cur.odo, miles:miles, days:days, rate:rate, isFirst:isFirst});
+    }
+    rows.reverse(); // newest first
+
+    out += '<table class="dtable"><thead><tr>'
+        +    '<th>Date</th><th>Odometer</th><th>Miles</th><th>Days</th><th>Mi/day</th>'
+        + '</tr></thead><tbody>';
+    for(var j=0;j<rows.length;j++){
+      var r=rows[j];
+      if(r.miles==null){
+        out += '<tr><td>'+fmtDateShort(r.date)+'</td>'
+            +  '<td class="dt-odo mono">'+fmtNum(r.odo)+'</td>'
+            +  '<td colspan="3" style="text-align:center;color:var(--text-faint);font-style:italic">first reading</td></tr>';
+      }else{
+        out += '<tr>'
+            +   '<td>'+fmtDateShort(r.date)+'</td>'
+            +   '<td class="dt-odo mono">'+fmtNum(r.odo)+'</td>'
+            +   '<td class="dt-miles mono">+'+fmtNum(r.miles)+'</td>'
+            +   '<td class="mono" style="color:var(--text-dim)">'+r.days+'</td>'
+            +   '<td class="dt-rate mono">'+r.rate.toFixed(1)+'</td>'
+            + '</tr>';
+      }
+    }
+    out += '</tbody></table>';
+    out += '</div>';
+    return out;
   }
 
   /* ---------- Log sheet ---------- */
